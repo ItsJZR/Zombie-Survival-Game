@@ -3,332 +3,134 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Zombie Survival — Single File</title>
+  <title>Zombie Survival — Sprite Edition</title>
   <style>
-    :root{--bg1:#0b1220;--bg2:#1b2b3b;--accent:#ff6b6b}
-    html,body{height:100%;margin:0;background:linear-gradient(180deg,var(--bg1),var(--bg2));font-family:Inter,system-ui,Segoe UI,Roboto,Arial}
-    canvas{display:block;margin:0 auto;background: radial-gradient(circle at 30% 20%, rgba(255,255,255,0.02), transparent 5%), linear-gradient(180deg,#0f1724, #0b1322 60%); box-shadow:0 6px 30px rgba(0,0,0,0.6); border-radius:8px}
-    .hud{position:fixed;left:20px;top:20px;color:#e6eef8;font-weight:600}
-    .hud .title{font-size:18px;margin-bottom:6px}
-    .hud .line{font-size:14px;margin:2px 0}
-    .center-ui{position:fixed;left:50%;transform:translateX(-50%);top:20px;color:#fff;text-align:center}
-    .center-ui .wave{background:linear-gradient(90deg,#ffd27a,#ff6b6b);padding:6px 12px;border-radius:999px;font-weight:700;color:#111}
+    html,body{height:100%;margin:0;background:#0b1220;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;}
+    canvas{display:block;margin:0 auto;background:#1e2a38;box-shadow:0 6px 30px rgba(0,0,0,0.6);border-radius:8px;}
+    .hud{position:fixed;left:20px;top:20px;color:#fff;font-weight:600;}
+    .hud .line{font-size:14px;margin:2px 0;}
+    .center-ui{position:fixed;left:50%;transform:translateX(-50%);top:20px;color:#fff;text-align:center;}
     .controls{position:fixed;right:20px;top:20px;color:#cfe3ff;text-align:right;font-size:13px}
-    .footer{position:fixed;left:0;right:0;bottom:8px;text-align:center;color:rgba(255,255,255,0.5);font-size:12px}
+    #shopUI{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#222;padding:20px;border-radius:10px;color:#fff;text-align:center;display:none;}
+    #shopUI h2{margin:0 0 10px 0;}
+    #shopUI button{display:block;margin:6px auto;padding:8px 16px;border:none;border-radius:6px;background:#4a6bff;color:#fff;font-weight:bold;cursor:pointer;}
+    #shopUI button:hover{background:#6a8dff;}
+    #pausedOverlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);color:#fff;font-size:36px;display:none;align-items:center;justify-content:center;}
   </style>
 </head>
 <body>
   <div class="hud">
-    <div class="title">Zombie Survival</div>
     <div class="line" id="hp">HP: 100</div>
+    <div class="line" id="stamina">Stamina: 100</div>
+    <div class="line" id="ammo">Ammo: 120/120</div>
     <div class="line" id="money">Money: $0</div>
-    <div class="line" id="ammo">Ammo: ∞</div>
   </div>
   <div class="center-ui"><div class="wave" id="waveTag">Wave 1 / 20</div></div>
   <div class="controls">
-    <div>WASD to move • Mouse to aim</div>
-    <div>Click to shoot • R to restart after death</div>
+    <div>WASD to move • Shift to sprint • Mouse to aim</div>
+    <div>Click to shoot • P to pause • R to restart after death</div>
   </div>
-  <div class="footer">Made with pure HTML5 canvas • Smooth pooling + requestAnimationFrame</div>
+  <div id="shopUI">
+    <h2>Shop</h2>
+    <button onclick="buyUpgrade('hp')">+20 Max Health</button>
+    <button onclick="buyUpgrade('stamina')">+20 Max Stamina</button>
+    <button onclick="buyUpgrade('ammo')">Refill Ammo</button>
+    <button onclick="buyUpgrade('gun')">Buy Better Gun</button>
+    <button onclick="skipShop()">Skip Shop</button>
+  </div>
+  <div id="pausedOverlay">PAUSED</div>
   <canvas id="game" width="1100" height="700"></canvas>
 
 <script>
-// ---------- Configuration ----------
-const CONFIG = {
-  width: 1100, height: 700,
-  maxWaves: 20,
-  baseSpawn: 3,         // zombies to start per wave
-  spawnIncrease: 2,     // extra zombies per wave
-  zombieBaseHP: 8,
-  zombieScalePerWave: 1.12,
-  playerSpeed: 220,     // pixels per second
-  bulletSpeed: 900,
-  fireRate: 240,        // ms between shots
-  canvasBgTile: 120
+const CONFIG = {width:1100,height:700,maxWaves:20,playerSpeed:180,sprintMult:1.7,bulletSpeed:700,fireRate:280};
+
+const cvs=document.getElementById('game');const ctx=cvs.getContext('2d');ctx.imageSmoothingEnabled=false;
+// Load individual sprite PNGs
+const SPRITES = {
+  player: new Image(),
+  zombie: new Image(),
+  werewolf: new Image(),
+  robot: new Image(),
+  grass: new Image(),
+  tree: new Image(),
+  rock: new Image(),
+  crate: new Image(),
+  pistol: new Image(),
+  rifle: new Image(),
+  shotgun: new Image()
 };
 
-// ---------- Setup ----------
-const cvs = document.getElementById('game');
-const ctx = cvs.getContext('2d');
-cvs.width = CONFIG.width; cvs.height = CONFIG.height;
+SPRITES.player.src = "assets/sprites/player.png";
+SPRITES.zombie.src = "assets/sprites/zombie.png";
+SPRITES.werewolf.src = "assets/sprites/werewolf.png";
+SPRITES.robot.src = "assets/sprites/robot.png";
+SPRITES.grass.src = "assets/sprites/grass.png";
+SPRITES.tree.src = "assets/sprites/tree.png";
+SPRITES.rock.src = "assets/sprites/rock.png";
+SPRITES.crate.src = "assets/sprites/crate.png";
+SPRITES.pistol.src = "assets/sprites/pistol.png";
+SPRITES.rifle.src = "assets/sprites/rifle.png";
+SPRITES.shotgun.src = "assets/sprites/shotgun.png";
 
-let lastTime = 0, delta = 0; // for time-based movement
-let mouse = {x: cvs.width/2, y:cvs.height/2, down:false};
-let keys = {};
-
-// HUD refs
-const hpEl = document.getElementById('hp');
-const moneyEl = document.getElementById('money');
-const waveTag = document.getElementById('waveTag');
-
-// ---------- Game State ----------
-let game = {
-  running: true,
-  player: null,
-  bullets: [],
-  zombies: [],
-  wave: 1,
-  zombiesToSpawn: 0,
-  spawnCooldown: 0,
-  money: 0,
-  lastShot: -9999,
-  enemiesAlive: 0,
-  ended: false
-};
-
-// Pools for performance
-const POOL = { bullets: [], zombies: [] };
-
-// ---------- Utilities ----------
-function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
-function rand(min,max){return Math.random()*(max-min)+min}
-function distance(a,b){const dx=a.x-b.x, dy=a.y-b.y; return Math.hypot(dx,dy)}
-
-// ---------- Entities ----------
-function createPlayer(){
-  return {x: CONFIG.width/2, y: CONFIG.height/2, r:18, hp:100, speed:CONFIG.playerSpeed, angle:0};
+// Draw helper
+function drawSprite(name, x, y, scale = 1) {
+  const img = SPRITES[name];
+  if (!img.complete) return;
+  const w = img.width * scale;
+  const h = img.height * scale;
+  ctx.drawImage(img, Math.floor(x - w / 2), Math.floor(y - h / 2), w, h);
 }
 
-function getBullet(){
-  return POOL.bullets.pop() || {x:0,y:0,vx:0,vy:0,life:0,alive:false,dmg:18};
-}
-function spawnBullet(x,y,angle){
-  const b = getBullet();
-  b.x=x; b.y=y; b.vx=Math.cos(angle)*CONFIG.bulletSpeed; b.vy=Math.sin(angle)*CONFIG.bulletSpeed;
-  b.life=1.2; b.alive=true; b.dmg=20; game.bullets.push(b);
-}
+let keys={},mouse={x:CONFIG.width/2,y:CONFIG.height/2,down:false};
+window.addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if(e.key.toLowerCase()==='p'){togglePause();}if(e.key.toLowerCase()==='r'&&game.ended)restartGame();});
+window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false});
+cvs.addEventListener('mousemove',e=>{const rect=cvs.getBoundingClientRect();mouse.x=(e.clientX-rect.left)*(cvs.width/rect.width);mouse.y=(e.clientY-rect.top)*(cvs.height/rect.height);});
+cvs.addEventListener('mousedown',()=>mouse.down=true);
+cvs.addEventListener('mouseup',()=>mouse.down=false);
 
-function getZombie(){
-  return POOL.zombies.pop() || {x:0,y:0,hp:10,speed:40,r:18,alive:false,hitFlash:0};
-}
-function spawnZombie(){
-  const z = getZombie();
-  // spawn along edges
-  const side = Math.floor(rand(0,4));
-  if(side===0){z.x=-40; z.y=rand(0,CONFIG.height);} 
-  else if(side===1){z.x=CONFIG.width+40; z.y=rand(0,CONFIG.height);} 
-  else if(side===2){z.x=rand(0,CONFIG.width); z.y=-40;} 
-  else {z.x=rand(0,CONFIG.width); z.y=CONFIG.height+40;} 
-  z.hp = Math.round(CONFIG.zombieBaseHP * Math.pow(CONFIG.zombieScalePerWave, game.wave-1));
-  z.speed = 40 + game.wave * 4 + rand(-6,6);
-  z.r = 18 + Math.min(8, Math.floor(game.wave/5));
-  z.alive = true; z.hitFlash=0; game.zombies.push(z); game.enemiesAlive++;
-}
+let game={player:null,bullets:[],enemies:[],wave:1,money:0,ammo:120,maxAmmo:120,stamina:100,maxStamina:100,hp:100,maxHp:100,lastShot:0,paused:false,ended:false};
+let shopCosts={hp:100,stamina:120,ammo:50,gun:200};
 
-// ---------- Input ----------
-cvs.addEventListener('mousemove', e=>{
-  const rect=cvs.getBoundingClientRect(); mouse.x = (e.clientX-rect.left)*(cvs.width/rect.width); mouse.y=(e.clientY-rect.top)*(cvs.height/rect.height);
-});
-cvs.addEventListener('mousedown', e=>{mouse.down=true});
-cvs.addEventListener('mouseup', e=>{mouse.down=false});
-window.addEventListener('keydown', e=>{keys[e.key.toLowerCase()]=true; if(e.key.toLowerCase()==='r' && game.ended) restartGame();});
-window.addEventListener('keyup', e=>{keys[e.key.toLowerCase()]=false});
+function createPlayer(){return{x:CONFIG.width/2,y:CONFIG.height/2,speed:CONFIG.playerSpeed}};
 
-// ---------- Game logic ----------
-function startWave(w){
-  game.zombiesToSpawn = CONFIG.baseSpawn + (w-1)*CONFIG.spawnIncrease;
-  waveTag.textContent = `Wave ${w} / ${CONFIG.maxWaves}`;
-}
+function spawnEnemy(){let type='zombie';if(game.wave>=12&&Math.random()<0.3)type='robot';else if(game.wave>=7&&Math.random()<0.5)type='werewolf';
+let hp=30;if(type==='zombie')hp=20+game.wave*3;if(type==='werewolf')hp=40+game.wave*4;if(type==='robot')hp=80+game.wave*6;
+game.enemies.push({x:Math.random()*CONFIG.width,y:Math.random()*CONFIG.height,type,hp});}
 
-function update(dt){
-  if(!game.running) return;
-  const p = game.player;
-  // PLAYER MOVEMENT
-  let dx=0, dy=0; if(keys['w']) dy-=1; if(keys['s']) dy+=1; if(keys['a']) dx-=1; if(keys['d']) dx+=1;
-  const mag = Math.hypot(dx,dy) || 1; dx/=mag; dy/=mag;
-  p.x += dx * p.speed * dt; p.y += dy * p.speed * dt;
-  p.x = clamp(p.x, 20, CONFIG.width-20); p.y = clamp(p.y, 20, CONFIG.height-20);
+function update(dt){if(game.paused||game.ended)return;
+const p=game.player;let dx=0,dy=0;if(keys['w'])dy-=1;if(keys['s'])dy+=1;if(keys['a'])dx-=1;if(keys['d'])dx+=1;let mag=Math.hypot(dx,dy)||1;dx/=mag;dy/=mag;let speed=p.speed;
+if(keys['shift']&&game.stamina>0){speed*=CONFIG.sprintMult;game.stamina-=30*dt;}else{game.stamina=Math.min(game.maxStamina,game.stamina+15*dt);}if(game.stamina<0)game.stamina=0;
+p.x+=dx*speed*dt;p.y+=dy*speed*dt;p.x=Math.max(16,Math.min(CONFIG.width-16,p.x));p.y=Math.max(16,Math.min(CONFIG.height-16,p.y));
 
-  // AIM
-  p.angle = Math.atan2(mouse.y - p.y, mouse.x - p.x);
+if(mouse.down&&performance.now()-game.lastShot>CONFIG.fireRate&&game.ammo>0){game.lastShot=performance.now();game.ammo--;game.bullets.push({x:p.x,y:p.y,vx:(mouse.x-p.x)/Math.hypot(mouse.x-p.x,mouse.y-p.y)*CONFIG.bulletSpeed,vy:(mouse.y-p.y)/Math.hypot(mouse.x-p.x,mouse.y-p.y)*CONFIG.bulletSpeed,life:1});}
 
-  // SHOOT
-  if(mouse.down && (performance.now() - game.lastShot) > CONFIG.fireRate){
-    game.lastShot = performance.now();
-    // spawn 1 bullet from muzzle
-    const muzzleX = p.x + Math.cos(p.angle)*22;
-    const muzzleY = p.y + Math.sin(p.angle)*22;
-    spawnBullet(muzzleX,muzzleY,p.angle);
-  }
+for(let b of game.bullets){b.x+=b.vx*dt;b.y+=b.vy*dt;b.life-=dt;}game.bullets=game.bullets.filter(b=>b.life>0);
+for(let e of game.enemies){const ang=Math.atan2(p.y-e.y,p.x-e.x);if(e.type==='werewolf'){e.x+=Math.cos(ang)*100*dt;e.y+=Math.sin(ang)*100*dt;}else if(e.type==='robot'){e.x+=Math.cos(ang)*40*dt;e.y+=Math.sin(ang)*40*dt;}else{e.x+=Math.cos(ang)*60*dt;e.y+=Math.sin(ang)*60*dt;}}
 
-  // BULLETS
-  for(let i=game.bullets.length-1;i>=0;i--){
-    const b = game.bullets[i]; if(!b.alive) continue;
-    b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt; 
-    if(b.life<=0 || b.x<-60 || b.y<-60 || b.x>CONFIG.width+60 || b.y>CONFIG.height+60){ b.alive=false; game.bullets.splice(i,1); POOL.bullets.push(b); continue; }
-    // collision with zombies
-    for(let j=game.zombies.length-1;j>=0;j--){
-      const z = game.zombies[j]; if(!z.alive) continue;
-      const dist = Math.hypot(b.x - z.x, b.y - z.y);
-      if(dist < z.r+4){ z.hp -= b.dmg; z.hitFlash=0.15; b.alive=false; game.bullets.splice(i,1); POOL.bullets.push(b); if(z.hp<=0){ killZombie(j);} break; }
-    }
-  }
+for(let b of game.bullets){for(let e of game.enemies){if(Math.hypot(b.x-e.x,b.y-e.y)<20){e.hp-=20;b.life=0;if(e.hp<=0){game.money+=20;}}}}
+game.enemies=game.enemies.filter(e=>e.hp>0);
 
-  // ZOMBIES
-  for(let i=game.zombies.length-1;i>=0;i--){
-    const z = game.zombies[i]; if(!z.alive) continue;
-    const ang = Math.atan2(p.y - z.y, p.x - z.x);
-    z.x += Math.cos(ang) * z.speed * dt;
-    z.y += Math.sin(ang) * z.speed * dt;
-    if(z.hitFlash>0) z.hitFlash -= dt;
-    // touch player
-    if(Math.hypot(z.x-p.x, z.y-p.y) < z.r + p.r - 6){
-      // damage player and push back
-      if(!z._hitCooldown) z._hitCooldown = 0;
-      z._hitCooldown -= dt; if(z._hitCooldown<=0){ p.hp -= 6 + Math.floor(game.wave/3); z._hitCooldown=0.6; }
-      // slight recoil
-      const push = 8; p.x -= Math.cos(ang)*push; p.y -= Math.sin(ang)*push;
-    }
-  }
+if(game.enemies.length===0){if(game.wave%3===0){openShop();}else{game.wave++;for(let i=0;i<5+game.wave*2;i++)spawnEnemy();}}}
 
-  // SPAWNING
-  if(game.zombiesToSpawn > 0){
-    game.spawnCooldown -= dt;
-    if(game.spawnCooldown <= 0){ spawnZombie(); game.zombiesToSpawn--; game.spawnCooldown = 0.6 - Math.min(0.4, game.wave*0.02); }
-  }
+function render(){ctx.clearRect(0,0,CONFIG.width,CONFIG.height);
+for(let x=0;x<CONFIG.width;x+=32){for(let y=0;y<CONFIG.height;y+=32){drawSprite('grass',x+16,y+16,1);}}
+for(let e of game.enemies){drawSprite(e.type,e.x,e.y,1);}
+for(let b of game.bullets){ctx.fillStyle='#ffd27a';ctx.fillRect(b.x-2,b.y-2,4,4);}
+const p=game.player;drawSprite('player',p.x,p.y,1);}
 
-  // WAVE ADVANCEMENT
-  if(game.zombiesToSpawn===0 && game.enemiesAlive===0){
-    if(game.wave < CONFIG.maxWaves){ game.wave++; startWave(game.wave);} else { endGame(true); }
-  }
+function loop(ts){if(!lastTime)lastTime=ts;let dt=(ts-lastTime)/1000;lastTime=ts;update(dt);render();updateHUD();requestAnimationFrame(loop);}let lastTime=0;
 
-  // PLAYER DEATH
-  if(p.hp <= 0 && !game.ended){ endGame(false); }
+function updateHUD(){document.getElementById('hp').textContent=`HP: ${Math.round(game.hp)}/${game.maxHp}`;document.getElementById('stamina').textContent=`Stamina: ${Math.round(game.stamina)}/${game.maxStamina}`;document.getElementById('ammo').textContent=`Ammo: ${game.ammo}/${game.maxAmmo}`;document.getElementById('money').textContent=`Money: $${game.money}`;document.getElementById('waveTag').textContent=`Wave ${game.wave}/${CONFIG.maxWaves}`;}
 
-  // Update HUD
-  hpEl.textContent = `HP: ${Math.max(0,Math.round(p.hp))}`;
-  moneyEl.textContent = `Money: $${game.money}`;
-}
+function togglePause(){game.paused=!game.paused;document.getElementById('pausedOverlay').style.display=game.paused?'flex':'none';}
 
-function killZombie(index){
-  const z = game.zombies[index]; z.alive=false; game.enemiesAlive--; // reward
-  game.money += 5 + Math.floor(game.wave*1.5);
-  // recycle
-  POOL.zombies.push(z);
-  game.zombies.splice(index,1);
-}
+function openShop(){game.paused=true;document.getElementById('shopUI').style.display='block';}
+function skipShop(){document.getElementById('shopUI').style.display='none';game.paused=false;game.wave++;for(let i=0;i<5+game.wave*2;i++)spawnEnemy();}
+function buyUpgrade(type){if(game.money<shopCosts[type])return;if(type==='hp'){game.maxHp+=20;game.hp=game.maxHp;}if(type==='stamina'){game.maxStamina+=20;game.stamina=game.maxStamina;}if(type==='ammo'){game.ammo=game.maxAmmo;}if(type==='gun'){CONFIG.fireRate=Math.max(120,CONFIG.fireRate-40);}game.money-=shopCosts[type];shopCosts[type]=Math.round(shopCosts[type]*1.4);}
 
-function endGame(won){
-  game.running=false; game.ended=true;
-  setTimeout(()=>{
-    const message = won ? 'YOU SURVIVED! All waves cleared.' : 'YOU DIED. Press R to restart.';
-    waveTag.textContent = message;
-  }, 300);
-}
+function restartGame(){game={player:createPlayer(),bullets:[],enemies:[],wave:1,money:0,ammo:120,maxAmmo:120,stamina:100,maxStamina:100,hp:100,maxHp:100,lastShot:0,paused:false,ended:false};for(let i=0;i<5+game.wave*2;i++)spawnEnemy();}
 
-function restartGame(){
-  // clear pools
-  while(game.bullets.length) POOL.bullets.push(game.bullets.pop());
-  while(game.zombies.length) POOL.zombies.push(game.zombies.pop());
-  game.player = createPlayer(); game.player.hp = 100;
-  game.bullets.length=0; game.zombies.length=0; game.wave=1; game.money=0; game.enemiesAlive=0; game.ended=false; game.running=true; startWave(1);
-}
-
-// ---------- Rendering ----------
-function drawBackground(t){
-  // Parallax starfield + subtle grid
-  ctx.save();
-  // sky gradient already via CSS but we add ground/tiles
-  // draw subtle tiles ground
-  const tile = CONFIG.canvasBgTile;
-  ctx.globalAlpha = 0.06;
-  ctx.translate((t*0.02)%tile, (t*0.01)%tile);
-  for(let x=-tile;x<CONFIG.width+tile;x+=tile){
-    for(let y=CONFIG.height-300;y<CONFIG.height+tile;y+=tile){
-      const gx = x, gy = y;
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(gx, gy, 1, 1);
-    }
-  }
-  ctx.restore();
-
-  // distant hills
-  const grad = ctx.createLinearGradient(0, CONFIG.height*0.65, 0, CONFIG.height);
-  grad.addColorStop(0,'rgba(12,20,28,0.6)'); grad.addColorStop(1,'rgba(6,10,14,1)');
-  ctx.fillStyle = grad; ctx.beginPath(); ctx.moveTo(0,CONFIG.height);
-  for(let i=0;i<20;i++){ const x = (i/19)*CONFIG.width; const y = CONFIG.height - 80 - Math.sin((i+t*0.0006)*0.9)*30; ctx.lineTo(x,y);} ctx.lineTo(CONFIG.width,CONFIG.height); ctx.closePath(); ctx.fill();
-}
-
-function drawPlayer(p){
-  // shadow
-  ctx.save(); ctx.globalAlpha=0.12; ctx.beginPath(); ctx.ellipse(p.x, p.y+18, p.r+6, p.r/2+6, 0,0,Math.PI*2); ctx.fillStyle='#000'; ctx.fill(); ctx.restore();
-  // body
-  ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.angle);
-  // torso
-  ctx.fillStyle = '#6fb3ff'; ctx.beginPath(); ctx.ellipse(0,0,14,18,0,0,Math.PI*2); ctx.fill();
-  // head
-  ctx.beginPath(); ctx.fillStyle='#eaf6ff'; ctx.ellipse(0,-22,12,12,0,0,Math.PI*2); ctx.fill();
-  // eye
-  ctx.fillStyle='#222'; ctx.beginPath(); ctx.ellipse(5,-24,2.6,2.6,0,0,Math.PI*2); ctx.fill();
-  // gun
-  ctx.fillStyle='#333'; ctx.fillRect(8, -4, 28, 8);
-  ctx.fillStyle='#444'; ctx.fillRect(28, -2, 8, 4);
-  ctx.restore();
-}
-
-function drawZombie(z){
-  ctx.save();
-  // shadow
-  ctx.globalAlpha=0.12; ctx.beginPath(); ctx.ellipse(z.x, z.y+18, z.r+6, z.r/2+6, 0,0,Math.PI*2); ctx.fillStyle='#000'; ctx.fill(); ctx.globalAlpha=1;
-  ctx.translate(z.x,z.y);
-  // body color changes when low HP
-  const lifeFrac = clamp(z.hp / (CONFIG.zombieBaseHP * Math.pow(CONFIG.zombieScalePerWave, game.wave-1)), 0,1);
-  const green = Math.floor(80 + lifeFrac*100);
-  ctx.fillStyle = `rgb(${50},${green},${40})`;
-  // torso
-  ctx.beginPath(); ctx.ellipse(0,0,z.r*0.9,z.r*1.2,0,0,Math.PI*2); ctx.fill();
-  // head
-  ctx.fillStyle='#c9e3b7'; ctx.beginPath(); ctx.ellipse(0,-z.r-6,z.r*0.6,z.r*0.6,0,0,Math.PI*2); ctx.fill();
-  // eyes
-  ctx.fillStyle = '#222'; ctx.beginPath(); ctx.ellipse(-4,-z.r-8,2,2,0,0,Math.PI*2); ctx.ellipse(4,-z.r-8,2,2,0,0,Math.PI*2); ctx.fill();
-  // mouth / scar
-  ctx.strokeStyle='#6b2a2a'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(-5,-z.r-2); ctx.quadraticCurveTo(0,-z.r+6,5,-z.r-2); ctx.stroke();
-  // torn cloth
-  ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.beginPath(); ctx.moveTo(-z.r*0.6, z.r*0.25); ctx.lineTo(0,z.r*0.7); ctx.lineTo(z.r*0.5, z.r*0.25); ctx.closePath(); ctx.fill();
-  // hit flash
-  if(z.hitFlash > 0){ ctx.globalAlpha = 0.7; ctx.fillStyle = 'rgba(255,200,200,0.9)'; ctx.beginPath(); ctx.ellipse(0,0,z.r*1.05,z.r*1.35,0,0,Math.PI*2); ctx.fill(); }
-  ctx.restore();
-}
-
-function drawBullet(b){
-  ctx.save(); ctx.beginPath(); ctx.fillStyle='#ffd27a'; ctx.ellipse(b.x,b.y,4,2,0,0,Math.PI*2); ctx.fill(); ctx.restore();
-}
-
-function render(t){
-  // clear
-  ctx.clearRect(0,0,CONFIG.width,CONFIG.height);
-  // background
-  drawBackground(t);
-  // bullets behind feet
-  for(const b of game.bullets){ if(b.alive) drawBullet(b); }
-  // zombies
-  for(const z of game.zombies){ if(z.alive) drawZombie(z); }
-  // player on top
-  drawPlayer(game.player);
-  // top-right mini info
-  // Wave UI glow
-  ctx.save(); ctx.globalAlpha=0.06; ctx.fillStyle='#ff6b6b'; ctx.fillRect(CONFIG.width/2-120,12,240,36); ctx.restore();
-
-  // small crosshair
-  ctx.save(); ctx.beginPath(); ctx.strokeStyle='rgba(255,255,255,0.7)'; ctx.lineWidth=1.2; ctx.moveTo(mouse.x-9,mouse.y); ctx.lineTo(mouse.x+9,mouse.y); ctx.moveTo(mouse.x,mouse.y-9); ctx.lineTo(mouse.x,mouse.y+9); ctx.stroke(); ctx.restore();
-}
-
-// ---------- Main Loop ----------
-function loop(ts){
-  if(!lastTime) lastTime = ts; delta = (ts-lastTime)/1000; lastTime = ts;
-  update(delta);
-  render(ts);
-  requestAnimationFrame(loop);
-}
-
-// ---------- Init ----------
-(function(){
-  game.player = createPlayer(); startWave(1);
-  // spawn a few initial zombies for wave 1
-  // start the loop
-  requestAnimationFrame(loop);
-})();
-
+restartGame();requestAnimationFrame(loop);
 </script>
 </body>
 </html>
