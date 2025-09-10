@@ -45,19 +45,12 @@
 const CONFIG = {width:1100,height:700,maxWaves:20,playerSpeed:180,sprintMult:1.7,bulletSpeed:700,fireRate:280};
 
 const cvs=document.getElementById('game');const ctx=cvs.getContext('2d');ctx.imageSmoothingEnabled=false;
+
 // Load individual sprite PNGs
 const SPRITES = {
-  player: new Image(),
-  zombie: new Image(),
-  werewolf: new Image(),
-  robot: new Image(),
-  grass: new Image(),
-  tree: new Image(),
-  rock: new Image(),
-  crate: new Image(),
-  pistol: new Image(),
-  rifle: new Image(),
-  shotgun: new Image()
+  player: new Image(), zombie: new Image(), werewolf: new Image(), robot: new Image(),
+  grass: new Image(), tree: new Image(), rock: new Image(), crate: new Image(),
+  pistol: new Image(), rifle: new Image(), shotgun: new Image()
 };
 
 SPRITES.player.src = "assets/sprites/player_inter.png";
