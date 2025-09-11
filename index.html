@@ -1,141 +1,148 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Zombie Survival Game</title>
-<style>
-  body { margin:0; background:black; overflow:hidden; font-family:Arial, sans-serif; }
-  canvas { display:block; margin:0 auto; background:#222; image-rendering:pixelated; }
-  #menu, #shopOverlay, #pauseOverlay, #deathOverlay {
-    position:absolute; top:0; left:0; width:100%; height:100%;
-    display:flex; justify-content:center; align-items:center;
-    flex-direction:column; background:rgba(0,0,0,0.8); color:white; text-align:center;
-    font-family:Arial, sans-serif;
-  }
-  #menu h1 { font-size:48px; margin-bottom:20px; }
-  #menu button, #shopOverlay button, #pauseOverlay button, #deathOverlay button {
-    padding:10px 20px; margin:10px; font-size:18px; border:none; border-radius:8px; cursor:pointer;
-  }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Zombie Survival — Sprite Edition</title>
+  <style>
+    html,body{height:100%;margin:0;background:#0b1220;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;}
+    canvas{display:block;margin:0 auto;background:#1e2a38;box-shadow:0 6px 30px rgba(0,0,0,0.6);border-radius:8px;}
+    .hud{position:fixed;left:20px;top:20px;color:#fff;font-weight:600;}
+    .hud .line{font-size:14px;margin:2px 0;}
+    .center-ui{position:fixed;left:50%;transform:translateX(-50%);top:20px;color:#fff;text-align:center;}
+    .controls{position:fixed;right:20px;top:20px;color:#cfe3ff;text-align:right;font-size:13px}
+    #shopUI{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#222;padding:20px;border-radius:10px;color:#fff;text-align:center;display:none;}
+    #shopUI h2{margin:0 0 10px 0;}
+    #shopUI button{display:block;margin:6px auto;padding:8px 16px;border:none;border-radius:6px;background:#4a6bff;color:#fff;font-weight:bold;cursor:pointer;}
+    #shopUI button:hover{background:#6a8dff;}
+    #pausedOverlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);color:#fff;font-size:36px;display:none;align-items:center;justify-content:center;}
+  </style>
 </head>
 <body>
-<canvas id="gameCanvas" width="800" height="600"></canvas>
-<div id="menu">
-  <h1>Zombie Survival</h1>
-  <p>Rules: Survive 20 waves of enemies. Use WASD to move, mouse to aim/shoot, Shift to sprint (uses stamina).<br>
-  Visit the shop every 3 waves to upgrade stats or weapons.</p>
-  <button onclick="startGame()">Play</button>
-</div>
-<div id="shopOverlay" style="display:none;"></div>
-<div id="pauseOverlay" style="display:none;"> <h2>Game Paused</h2><button onclick="togglePause()">Resume</button></div>
-<div id="deathOverlay" style="display:none;"> <h2>You Died!</h2><button onclick="restartGame()">Restart</button></div>
+  <div class="hud">
+    <div class="line" id="hp">HP: 100</div>
+    <div class="line" id="stamina">Stamina: 100</div>
+    <div class="line" id="ammo">Ammo: 120/120</div>
+    <div class="line" id="money">Money: $0</div>
+  </div>
+  <div class="center-ui"><div class="wave" id="waveTag">Wave 1 / 20</div></div>
+  <div class="controls">
+    <div>WASD to move • Shift to sprint • Mouse to aim</div>
+    <div>Click to shoot • P to pause • R to restart after death</div>
+  </div>
+  <div id="shopUI">
+    <h2>Shop</h2>
+    <button onclick="buyUpgrade('hp')">+20 Max Health</button>
+    <button onclick="buyUpgrade('stamina')">+20 Max Stamina</button>
+    <button onclick="buyUpgrade('ammo')">Refill Ammo</button>
+    <button onclick="buyUpgrade('gun')">Buy Better Gun</button>
+    <button onclick="skipShop()">Skip Shop</button>
+  </div>
+  <div id="pausedOverlay">PAUSED</div>
+  <canvas id="game" width="1100" height="700"></canvas>
+
 <script>
-const canvas=document.getElementById("gameCanvas"),ctx=canvas.getContext("2d");
+const CONFIG = {width:1100,height:700,maxWaves:20,playerSpeed:180,sprintMult:1.7,bulletSpeed:700,fireRate:280};
 
-// === SPRITES ===
-const SPRITES={};
-["player_64","zombie","werewolf","robot","grass","tree","rock","crate","pistol","rifle","shotgun"].forEach(n=>{
-  SPRITES[n]=new Image();
-  SPRITES[n].src=`assets/sprites/${n}.png`;
-});
-function drawSprite(name,x,y,scale=1){
-  const img=SPRITES[name]; if(!img.complete)return;
-  let w=32*scale,h=32*scale;
-  ctx.drawImage(img,Math.floor(x-w/2),Math.floor(y-h/2),w,h);
+const cvs=document.getElementById('game');const ctx=cvs.getContext('2d');ctx.imageSmoothingEnabled=false;
+
+// Load individual sprite PNGs
+const SPRITES = {
+  player: new Image(), zombie: new Image(), werewolf: new Image(), robot: new Image(),
+  grass: new Image(), tree: new Image(), rock: new Image(), crate: new Image(),
+  pistol: new Image(), rifle: new Image(), shotgun: new Image()
+};
+
+SPRITES.player.src = "assets/sprites/player.png";
+SPRITES.zombie.src = "assets/sprites/zombie.png";
+SPRITES.werewolf.src = "assets/sprites/werewolf.png";
+SPRITES.robot.src = "assets/sprites/robot.png";
+SPRITES.grass.src = "assets/sprites/grass.png";
+SPRITES.tree.src = "assets/sprites/tree.png";
+SPRITES.rock.src = "assets/sprites/rock.png";
+SPRITES.crate.src = "assets/sprites/crate.png";
+SPRITES.pistol.src = "assets/sprites/pistol.png";
+SPRITES.rifle.src = "assets/sprites/rifle.png";
+SPRITES.shotgun.src = "assets/sprites/shotgun.png";
+
+// Draw helper
+function drawSprite(name, x, y, scale = 1) {
+  const img = SPRITES[name];
+  if (!img.complete) return;
+  const w = img.width * scale;
+  const h = img.height * scale;
+  ctx.drawImage(img, Math.floor(x - w / 2), Math.floor(y - h / 2), w, h);
 }
 
-// === CONFIG & STATE ===
-const CONFIG={width:800,height:600};
-let player,enemies=[],bullets=[],keys={},money=0,wave=1,paused=false,inShop=false,mapObjects=[];
+let keys={},mouse={x:CONFIG.width/2,y:CONFIG.height/2,down:false};
+window.addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if(e.key.toLowerCase()==='p'){togglePause();}if(e.key.toLowerCase()==='r'&&game.ended)restartGame();});
+window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false});
+cvs.addEventListener('mousemove',e=>{const rect=cvs.getBoundingClientRect();mouse.x=(e.clientX-rect.left)*(cvs.width/rect.width);mouse.y=(e.clientY-rect.top)*(cvs.height/rect.height);});
+cvs.addEventListener('mousedown',()=>mouse.down=true);
+cvs.addEventListener('mouseup',()=>mouse.down=false);
 
-function resetPlayer(){
-  player={x:400,y:300,hp:100,maxHp:100,stamina:100,maxStamina:100,ammo:30,maxAmmo:30,money:0,speed:2};
+let game={player:null,bullets:[],enemies:[],wave:1,money:0,objects:[],paused:false,ended:false};
+let shopCosts={hp:100,stamina:120,ammo:50,gun:200};
+
+function createPlayer(){
+  return {
+    x:CONFIG.width/2,y:CONFIG.height/2,speed:CONFIG.playerSpeed,
+    hp:100,maxHp:100,stamina:100,maxStamina:100,
+    ammo:120,maxAmmo:120,lastShot:0
+  };
 }
 
-// === MAP GENERATION WITH CLUSTERS ===
+function spawnEnemy(){let type='zombie';if(game.wave>=12&&Math.random()<0.3)type='robot';else if(game.wave>=7&&Math.random()<0.5)type='werewolf';
+let hp=30;if(type==='zombie')hp=20+game.wave*3;if(type==='werewolf')hp=40+game.wave*4;if(type==='robot')hp=80+game.wave*6;
+game.enemies.push({x:Math.random()*CONFIG.width,y:Math.random()*CONFIG.height,type,hp});}
+
+// === Simple Map Generation ===
 function generateMap(){
-  mapObjects=[];
-  for(let i=0;i<6;i++){let cx=Math.random()*CONFIG.width,cy=Math.random()*CONFIG.height,cluster=3+Math.floor(Math.random()*5);
-    for(let j=0;j<cluster;j++){let ox=(Math.random()-.5)*80,oy=(Math.random()-.5)*80;mapObjects.push({type:'tree',x:cx+ox,y:cy+oy});}}
-  for(let i=0;i<3;i++){let cx=Math.random()*CONFIG.width,cy=Math.random()*CONFIG.height,cluster=2+Math.floor(Math.random()*4);
-    for(let j=0;j<cluster;j++){let ox=(Math.random()-.5)*100,oy=(Math.random()-.5)*100;mapObjects.push({type:'rock',x:cx+ox,y:cy+oy});}}
-  for(let r of mapObjects.filter(o=>o.type==='rock')){if(Math.random()<0.3){let ox=(Math.random()-.5)*40,oy=(Math.random()-.5)*40;mapObjects.push({type:'crate',x:r.x+ox,y:r.y+oy});}}
+  game.objects=[];
+  let numTrees=10+Math.floor(Math.random()*10);
+  let numRocks=5+Math.floor(Math.random()*6);
+  let numCrates=3+Math.floor(Math.random()*4);
+
+  for(let i=0;i<numTrees;i++) game.objects.push({type:'tree',x:Math.random()*CONFIG.width,y:Math.random()*CONFIG.height});
+  for(let i=0;i<numRocks;i++) game.objects.push({type:'rock',x:Math.random()*CONFIG.width,y:Math.random()*CONFIG.height});
+  for(let i=0;i<numCrates;i++) game.objects.push({type:'crate',x:Math.random()*CONFIG.width,y:Math.random()*CONFIG.height});
 }
 
-// === ENEMIES ===
-function spawnWave(){
-  enemies=[];let count=wave*2;
-  for(let i=0;i<count;i++){
-    let type="zombie"; if(wave>=7&&Math.random()<0.3)type="werewolf"; if(wave>=12&&Math.random()<0.2)type="robot";
-    enemies.push({x:Math.random()*CONFIG.width,y:Math.random()*CONFIG.height,type,hp:type==="zombie"?30:type==="werewolf"?60:100,damage:type==="zombie"?5:type==="werewolf"?10:15});
-  }
-}
+function update(dt){if(game.paused||game.ended)return;
+const p=game.player;let dx=0,dy=0;if(keys['w'])dy-=1;if(keys['s'])dy+=1;if(keys['a'])dx-=1;if(keys['d'])dx+=1;let mag=Math.hypot(dx,dy)||1;dx/=mag;dy/=mag;let speed=p.speed;
+if(keys['shift']&&p.stamina>0){speed*=CONFIG.sprintMult;p.stamina-=30*dt;}else{p.stamina=Math.min(p.maxStamina,p.stamina+15*dt);}if(p.stamina<0)p.stamina=0;
+p.x+=dx*speed*dt;p.y+=dy*speed*dt;p.x=Math.max(16,Math.min(CONFIG.width-16,p.x));p.y=Math.max(16,Math.min(CONFIG.height-16,p.y));
 
-// === GAME LOOP ===
-function update(){if(paused||inShop)return;
-  if(keys["Shift"]&&player.stamina>0){player.speed=3;player.stamina-=0.5;}else{player.speed=2;player.stamina=Math.min(player.maxStamina,player.stamina+0.2);} 
-  if(keys["w"])player.y-=player.speed; if(keys["s"])player.y+=player.speed; if(keys["a"])player.x-=player.speed; if(keys["d"])player.x+=player.speed;
+if(mouse.down&&performance.now()-p.lastShot>CONFIG.fireRate&&p.ammo>0){p.lastShot=performance.now();p.ammo--;game.bullets.push({x:p.x,y:p.y,vx:(mouse.x-p.x)/Math.hypot(mouse.x-p.x,mouse.y-p.y)*CONFIG.bulletSpeed,vy:(mouse.y-p.y)/Math.hypot(mouse.x-p.x,mouse.y-p.y)*CONFIG.bulletSpeed,life:1});}
 
-  for(let e of enemies){
-    let dx=player.x-e.x,dy=player.y-e.y,dist=Math.hypot(dx,dy);
-    if(dist>0){e.x+=dx/dist*1;e.y+=dy/dist*1;}
-    if(dist<20){player.hp-=e.damage*0.02; if(player.hp<=0){document.getElementById("deathOverlay").style.display="flex";}}
-  }
-}
+for(let b of game.bullets){b.x+=b.vx*dt;b.y+=b.vy*dt;b.life-=dt;}game.bullets=game.bullets.filter(b=>b.life>0);
+for(let e of game.enemies){const ang=Math.atan2(p.y-e.y,p.x-e.x);if(e.type==='werewolf'){e.x+=Math.cos(ang)*100*dt;e.y+=Math.sin(ang)*100*dt;}else if(e.type==='robot'){e.x+=Math.cos(ang)*40*dt;e.y+=Math.sin(ang)*40*dt;}else{e.x+=Math.cos(ang)*60*dt;e.y+=Math.sin(ang)*60*dt;}}
+
+for(let b of game.bullets){for(let e of game.enemies){if(Math.hypot(b.x-e.x,b.y-e.y)<20){e.hp-=20;b.life=0;if(e.hp<=0){game.money+=20;}}}}
+game.enemies=game.enemies.filter(e=>e.hp>0);
+
+if(game.enemies.length===0){if(game.wave%3===0){openShop();}else{game.wave++;for(let i=0;i<5+game.wave*2;i++)spawnEnemy();}}}
 
 function render(){ctx.clearRect(0,0,CONFIG.width,CONFIG.height);
-  ctx.fillStyle="#0a0";ctx.fillRect(0,0,CONFIG.width,CONFIG.height);
-  for(let obj of mapObjects)drawSprite(obj.type,obj.x,obj.y,1);
-  drawSprite("player",player.x,player.y,1);
-  for(let e of enemies)drawSprite(e.type,e.x,e.y,1);
-  renderUI();
-}
+for(let x=0;x<CONFIG.width;x+=32){for(let y=0;y<CONFIG.height;y+=32){drawSprite('grass',x+16,y+16,1);}}
+for(let obj of game.objects){drawSprite(obj.type,obj.x,obj.y,1);}
+for(let e of game.enemies){drawSprite(e.type,e.x,e.y,1);}
+for(let b of game.bullets){ctx.fillStyle='#ffd27a';ctx.fillRect(b.x-2,b.y-2,4,4);}
+const p=game.player;drawSprite('player',p.x,p.y,1);}
 
-// === UI ===
-function renderUI(){ctx.save();ctx.font="16px Arial";ctx.fillStyle="white";ctx.textAlign="left";
-  let sidebarX=CONFIG.width-180,y=40;
-  ctx.fillText("Wave: "+wave,sidebarX,y);y+=40;
-  ctx.fillText("HP: "+Math.floor(player.hp)+"/"+player.maxHp,sidebarX,y);
-  ctx.fillStyle="red";ctx.fillRect(sidebarX,y+10,100,10);
-  ctx.fillStyle="lime";ctx.fillRect(sidebarX,y+10,(player.hp/player.maxHp)*100,10);y+=40;
-  ctx.fillStyle="white";ctx.fillText("Stamina: "+Math.floor(player.stamina),sidebarX,y);
-  ctx.fillStyle="gray";ctx.fillRect(sidebarX,y+10,100,10);
-  ctx.fillStyle="yellow";ctx.fillRect(sidebarX,y+10,(player.stamina/player.maxStamina)*100,10);y+=40;
-  ctx.fillStyle="white";ctx.fillText("Ammo: "+player.ammo+"/"+player.maxAmmo,sidebarX,y);y+=40;
-  ctx.fillText("Money: $"+player.money,sidebarX,y);
-  ctx.restore();}
+function loop(ts){if(!lastTime)lastTime=ts;let dt=(ts-lastTime)/1000;lastTime=ts;update(dt);render();updateHUD();requestAnimationFrame(loop);}let lastTime=0;
 
-// === SHOP ===
-let shopPrices={hp:50,stamina:50,ammo:30,gun:100};
-function openShop(){inShop=true;let html="<h2>Shop - Wave "+wave+" complete</h2>";
-  html+=`<button onclick=\"buy('hp')\">+20 Max HP ($${shopPrices.hp})</button>`;
-  html+=`<button onclick=\"buy('stamina')\">+20 Max Stamina ($${shopPrices.stamina})</button>`;
-  html+=`<button onclick=\"buy('ammo')\">+10 Max Ammo + Refill ($${shopPrices.ammo})</button>`;
-  html+=`<button onclick=\"buy('gun')\">Better Gun ($${shopPrices.gun})</button>`;
-  html+="<button onclick=\"skipShop()\">Skip</button>";
-  document.getElementById("shopOverlay").innerHTML=html;
-  document.getElementById("shopOverlay").style.display="flex";}
-function buy(item){if(player.money>=shopPrices[item]){
-  player.money-=shopPrices[item];
-  if(item=="hp")player.maxHp+=20;
-  if(item=="stamina")player.maxStamina+=20;
-  if(item=="ammo"){player.maxAmmo+=10;player.ammo=player.maxAmmo;}
-  shopPrices[item]=Math.floor(shopPrices[item]*1.5);
-}}
-function skipShop(){inShop=false;document.getElementById("shopOverlay").style.display="none";wave++;spawnWave();}
+function updateHUD(){const p=game.player;document.getElementById('hp').textContent=`HP: ${Math.round(p.hp)}/${p.maxHp}`;document.getElementById('stamina').textContent=`Stamina: ${Math.round(p.stamina)}/${p.maxStamina}`;document.getElementById('ammo').textContent=`Ammo: ${p.ammo}/${p.maxAmmo}`;document.getElementById('money').textContent=`Money: $${game.money}`;document.getElementById('waveTag').textContent=`Wave ${game.wave}/${CONFIG.maxWaves}`;}
 
-// === INPUT ===
-window.addEventListener("keydown",e=>{keys[e.key]=true;if(e.key==="p")togglePause();});
-window.addEventListener("keyup",e=>{keys[e.key]=false;});
-canvas.addEventListener("click",()=>{if(player.ammo>0){bullets.push({x:player.x,y:player.y,dx:1,dy:0});player.ammo--;}});
+function togglePause(){game.paused=!game.paused;document.getElementById('pausedOverlay').style.display=game.paused?'flex':'none';}
 
-function togglePause(){paused=!paused;document.getElementById("pauseOverlay").style.display=paused?"flex":"none";}
+function openShop(){game.paused=true;document.getElementById('shopUI').style.display='block';}
+function skipShop(){document.getElementById('shopUI').style.display='none';game.paused=false;game.wave++;for(let i=0;i<5+game.wave*2;i++)spawnEnemy();}
+function buyUpgrade(type){const p=game.player;if(game.money<shopCosts[type])return;if(type==='hp'){p.maxHp+=20;p.hp=p.maxHp;}if(type==='stamina'){p.maxStamina+=20;p.stamina=p.maxStamina;}if(type==='ammo'){p.ammo=p.maxAmmo;}if(type==='gun'){CONFIG.fireRate=Math.max(120,CONFIG.fireRate-40);}game.money-=shopCosts[type];shopCosts[type]=Math.round(shopCosts[type]*1.4);}
 
-// === GAME MANAGEMENT ===
-function startGame(){document.getElementById("menu").style.display="none";resetPlayer();wave=1;generateMap();spawnWave();loop();}
-function restartGame(){document.getElementById("deathOverlay").style.display="none";resetPlayer();wave=1;generateMap();spawnWave();}
+function restartGame(){game={player:createPlayer(),bullets:[],enemies:[],wave:1,money:0,objects:[],paused:false,ended:false};generateMap();for(let i=0;i<5+game.wave*2;i++)spawnEnemy();}
 
-function loop(){update();render();requestAnimationFrame(loop);}
+restartGame();requestAnimationFrame(loop);
 </script>
 </body>
 </html>
