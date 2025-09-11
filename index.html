@@ -34,7 +34,7 @@ const canvas=document.getElementById("gameCanvas"),ctx=canvas.getContext("2d");
 
 // === SPRITES ===
 const SPRITES={};
-["player_64","zombie_64","werewolf_64","robot_64","grass_64","tree_64","rock_64","crate_64","pistol_64","rifle_64","shotgun_64"].forEach(n=>{
+["player_64","zombie","werewolf","robot","grass","tree","rock","crate","pistol","rifle","shotgun"].forEach(n=>{
   SPRITES[n]=new Image();
   SPRITES[n].src=`assets/sprites/${n}.png`;
 });
